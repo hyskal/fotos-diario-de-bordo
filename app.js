@@ -288,7 +288,9 @@ function compressAndAddPhoto(file) {
                     id: Date.now() + Math.random(),
                     file: blob,
                     name: file.name,
-                    url: URL.createObjectURL(blob)
+                    url: URL.createObjectURL(blob),
+                    width: width,
+                    height: height
                 };
                 
                 selectedPhotos.push(photoData);
@@ -371,30 +373,55 @@ async function generatePDF() {
         
         console.log('jsPDF disponível, criando documento...');
         const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('portrait', 'mm', 'a4');
+        const doc = new jsPDF();
+        const dataHora = new Date();
+
+        // Configurações do PDF baseadas no script.js
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
         
-        // Configurações do PDF
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 20;
-        const contentWidth = pageWidth - (margin * 2);
+        // Adicionar logo simulado (como no script.js)
+        const logoWidthMm = 25;
+        const logoHeightMm = 25;
+        const logoMargin = 10;
         
-        // Header com logo e título
-        await addHeaderToPDF(pdf, margin, contentWidth, pageWidth);
+        // Função para adicionar logo em cada página
+        function addLogo(doc) {
+            // Simular logo com retângulo colorido
+            doc.setFillColor(30, 58, 138); // Cor azul CETEP
+            doc.rect(pageWidth - logoWidthMm - logoMargin, logoMargin, logoWidthMm, logoHeightMm, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.text('CETEP/LNAB', pageWidth - logoWidthMm/2 - logoMargin, logoMargin + logoHeightMm/2, { align: 'center' });
+        }
+
+        addLogo(doc);
+
+        // Header com informações (baseado no script.js)
+        const turma = elements.turmaInput ? elements.turmaInput.value.trim() : '';
+        const studentInputs = document.querySelectorAll('.student-input');
+        const students = Array.from(studentInputs).map(input => input.value.trim()).filter(name => name);
+        const titulo = students.join(', ');
         
-        // Informações da turma e estudantes
-        let yPosition = await addTurmaInfoToPDF(pdf, margin, 60);
-        yPosition = await addStudentsInfoToPDF(pdf, margin, yPosition + 10);
+        const headerText = `${titulo} - ${turma} - Gerado em: ${dataHora.toLocaleString()}`;
         
-        // Adicionar fotos se existirem
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
+        const headerTextX = 20;
+        const headerTextY = 20;
+        const textWidth = pageWidth - (logoWidthMm + logoMargin) - headerTextX - 10;
+        const splitText = doc.splitTextToSize(headerText, textWidth);
+        doc.text(splitText, headerTextX, headerTextY, { align: 'left' });
+
+        // Adicionar fotos se existirem (usando lógica do script.js)
         if (selectedPhotos.length > 0) {
             console.log('Adicionando fotos ao PDF...');
-            await addPhotosToPDF(pdf, margin, yPosition + 15, contentWidth);
+            await addPhotosWithScriptLogic(doc, selectedPhotos);
         }
         
         // Gerar blob do PDF
         console.log('Gerando blob do PDF...');
-        generatedPdfBlob = pdf.output('blob');
+        generatedPdfBlob = doc.output('blob');
         
         setLoadingState(false);
         showDownloadButton();
@@ -406,6 +433,87 @@ async function generatePDF() {
         console.error('Erro ao gerar PDF:', error);
         setLoadingState(false);
         showMessage(`${MESSAGES.error} (${error.message})`, 'error');
+    }
+}
+
+// Função que implementa a lógica do script.js para organizar fotos no PDF
+async function addPhotosWithScriptLogic(doc, photos) {
+    let y = 35;
+    let cellWidth = 85; 
+    let cellHeight;
+    let margin;
+
+    // Lógica de tamanho baseada na quantidade de fotos (como no script.js)
+    if (photos.length <= 4) {
+        cellHeight = 110;
+        margin = 10;
+    } else {
+        cellHeight = 76.5;
+        margin = 5;
+    }
+
+    let x = 20; 
+    const cellPadding = 2;
+    
+    // Função para adicionar logo em novas páginas
+    function addLogo(doc) {
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const logoWidthMm = 25;
+        const logoHeightMm = 25;
+        const logoMargin = 10;
+        
+        doc.setFillColor(30, 58, 138);
+        doc.rect(pageWidth - logoWidthMm - logoMargin, logoMargin, logoWidthMm, logoHeightMm, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.text('CETEP/LNAB', pageWidth - logoWidthMm/2 - logoMargin, logoMargin + logoHeightMm/2, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+    }
+    
+    for (let index = 0; index < photos.length; index++) {
+        const photo = photos[index];
+        
+        // Verificar se precisa de nova página
+        if (doc.internal.pageSize.height < y + cellHeight + margin) {
+            doc.addPage();
+            addLogo(doc);
+            y = 20;
+            x = 20;
+        }
+        
+        // Calcular dimensões finais da imagem mantendo proporção
+        let finalWidth = cellWidth;
+        let finalHeight = (photo.height * finalWidth) / photo.width;
+
+        if (finalHeight > cellHeight) {
+            finalHeight = cellHeight;
+            finalWidth = (photo.width * finalHeight) / photo.height;
+        }
+
+        // Posicionar imagens em 2 colunas (como no script.js)
+        if (index % 2 === 0 && index !== 0) {
+            y += cellHeight + margin; 
+            x = 20; 
+        }
+        
+        // Calcular posição centralizada da imagem na célula
+        const imgX = x + (cellWidth - finalWidth) / 2;
+        const imgY = y + (cellHeight - finalHeight) / 2;
+        
+        // Desenhar borda da célula
+        doc.setDrawColor(200, 200, 200);
+        doc.rect(x - cellPadding, y - cellPadding, cellWidth + 2 * cellPadding, cellHeight + 2 * cellPadding);
+        
+        // Adicionar imagem
+        try {
+            await addImageToPDF(doc, photo.url, imgX, imgY, finalWidth, finalHeight);
+            console.log(`Foto ${index + 1} adicionada ao PDF`);
+        } catch (error) {
+            console.error('Erro ao adicionar foto:', error);
+        }
+        
+        // Mover para próxima posição
+        x += cellWidth + margin;
     }
 }
 
@@ -444,98 +552,12 @@ function validateForm() {
     return true;
 }
 
-async function addHeaderToPDF(pdf, margin, contentWidth, pageWidth) {
-    // Logo (simulado com texto)
-    pdf.setFillColor(30, 58, 138); // Cor azul CETEP
-    pdf.rect(pageWidth - margin - 40, margin, 35, 12, 'F');
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(8);
-    pdf.text('CETEP/LNAB', pageWidth - margin - 37, margin + 8);
-    
-    // Título
-    pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(16);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('Diário de Bordo', margin, margin + 15);
-    
-    // Data
-    pdf.setFontSize(10);
-    pdf.setFont(undefined, 'normal');
-    const hoje = new Date().toLocaleDateString('pt-BR');
-    pdf.text(`Data: ${hoje}`, margin, margin + 25);
-    
-    console.log('Header adicionado ao PDF');
-}
-
-async function addTurmaInfoToPDF(pdf, margin, yPosition) {
-    const turma = elements.turmaInput ? elements.turmaInput.value.trim() : '';
-    
-    pdf.setFontSize(12);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('Turma:', margin, yPosition);
-    
-    pdf.setFont(undefined, 'normal');
-    pdf.text(turma, margin + 20, yPosition);
-    
-    console.log('Info da turma adicionada ao PDF');
-    return yPosition;
-}
-
-async function addStudentsInfoToPDF(pdf, margin, yPosition) {
-    const studentInputs = document.querySelectorAll('.student-input');
-    const students = Array.from(studentInputs).map(input => input.value.trim());
-    
-    pdf.setFontSize(12);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('Estudantes:', margin, yPosition);
-    
-    pdf.setFont(undefined, 'normal');
-    pdf.setFontSize(10);
-    
-    let currentY = yPosition + 7;
-    students.forEach((student, index) => {
-        pdf.text(`${index + 1}. ${student}`, margin + 5, currentY);
-        currentY += 5;
-    });
-    
-    console.log('Info dos estudantes adicionada ao PDF');
-    return currentY;
-}
-
-async function addPhotosToPDF(pdf, margin, yPosition, contentWidth) {
-    const photosPerRow = selectedPhotos.length <= 4 ? 2 : 2;
-    const photoWidth = (contentWidth - 10) / photosPerRow;
-    const photoHeight = photoWidth * 0.75; // Proporção 4:3
-    
-    let x = margin;
-    let y = yPosition;
-    let photosInCurrentRow = 0;
-    
-    for (let i = 0; i < selectedPhotos.length; i++) {
-        if (photosInCurrentRow === photosPerRow) {
-            x = margin;
-            y += photoHeight + 10;
-            photosInCurrentRow = 0;
-        }
-        
-        try {
-            await addImageToPDF(pdf, selectedPhotos[i].url, x, y, photoWidth, photoHeight);
-            console.log(`Foto ${i + 1} adicionada ao PDF`);
-        } catch (error) {
-            console.error('Erro ao adicionar foto:', error);
-        }
-        
-        x += photoWidth + 10;
-        photosInCurrentRow++;
-    }
-}
-
-function addImageToPDF(pdf, imageUrl, x, y, width, height) {
+function addImageToPDF(doc, imageUrl, x, y, width, height) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = function() {
             try {
-                pdf.addImage(img, 'JPEG', x, y, width, height);
+                doc.addImage(img, 'JPEG', x, y, width, height);
                 resolve();
             } catch (error) {
                 reject(error);
@@ -580,8 +602,19 @@ function downloadPDF() {
     }
     
     const turma = elements.turmaInput ? elements.turmaInput.value.trim().replace(/[^a-zA-Z0-9]/g, '_') : 'Turma';
-    const hoje = new Date().toISOString().split('T')[0];
-    const filename = `Diario_${turma}_${hoje}.pdf`;
+    const dataHora = new Date();
+    const dia = String(dataHora.getDate()).padStart(2, '0');
+    const mes = String(dataHora.getMonth() + 1).padStart(2, '0');
+    const ano = dataHora.getFullYear();
+    const dataFormatada = `${dia}${mes}${ano}`;
+
+    const turmaSanitizada = turma.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+    
+    const studentInputs = document.querySelectorAll('.student-input');
+    const students = Array.from(studentInputs).map(input => input.value.trim()).filter(name => name);
+    const tituloSanitizado = students.join('-').replace(/\s+/g, '-').replace(/[^\w-]/g, '').substring(0, 50);
+    
+    const filename = `${dataFormatada}-${turmaSanitizada}-${tituloSanitizado}.pdf`;
     
     const url = URL.createObjectURL(generatedPdfBlob);
     const a = document.createElement('a');
