@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Diário de Bordo - CETEP/LNAB</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header__content">
+                <div class="header__logo">
+                    <div class="logo">CETEP/LNAB</div>
+                </div>
+                <div class="header__title">
+                    <h1>Sistema de Diário de Bordo</h1>
+                    <p class="subtitle">Centro Territorial de Educação Profissional do Litoral Norte e Agreste Baiano</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Form -->
+        <main class="main">
+            <form id="diaryForm" class="diary-form">
+                <!-- Turma Section -->
+                <section class="form-section">
+                    <div class="card">
+                        <div class="card__body">
+                            <h2>Informações da Turma</h2>
+                            <div class="form-group">
+                                <label for="turma" class="form-label">Turma *</label>
+                                <input type="text" id="turma" name="turma" class="form-control" placeholder="Ex: Informática 2024.1" required>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Estudantes Section -->
+                <section class="form-section">
+                    <div class="card">
+                        <div class="card__body">
+                            <div class="section-header">
+                                <h2>Estudantes</h2>
+                                <button type="button" id="addStudentBtn" class="btn btn--secondary">
+                                    + Adicionar Estudante
+                                </button>
+                            </div>
+                            <div id="studentsContainer" class="students-container">
+                                <div class="student-input-group">
+                                    <div class="form-group">
+                                        <label class="form-label">Nome do Estudante *</label>
+                                        <input type="text" name="student" class="form-control student-input" placeholder="Nome completo do estudante" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Fotos Section -->
+                <section class="form-section">
+                    <div class="card">
+                        <div class="card__body">
+                            <h2>Fotos do Diário</h2>
+                            <div class="photo-upload-area">
+                                <div id="dropZone" class="drop-zone">
+                                    <div class="drop-zone__content">
+                                        <svg class="drop-zone__icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                                            <polyline points="21,15 16,10 5,21"/>
+                                        </svg>
+                                        <h3>Arraste as fotos aqui ou clique para selecionar</h3>
+                                        <p>Máximo de 6 fotos (JPG, PNG)</p>
+                                    </div>
+                                </div>
+                                <input type="file" id="photoInput" multiple accept="image/jpeg,image/jpg,image/png" style="display: none;">
+                                
+                                <div class="upload-actions">
+                                    <button type="button" id="selectPhotosBtn" class="btn btn--outline">
+                                        Selecionar Fotos
+                                    </button>
+                                    <div class="photo-counter">
+                                        <span id="photoCount">0</span>/6 fotos
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Photos Preview -->
+                            <div id="photosPreview" class="photos-preview hidden"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Actions -->
+                <section class="form-section">
+                    <div class="form-actions">
+                        <button type="button" id="generatePdfBtn" class="btn btn--primary btn--lg">
+                            <span id="generateBtnText">Gerar PDF</span>
+                            <div id="loadingSpinner" class="loading-spinner hidden"></div>
+                        </button>
+                        <button type="button" id="downloadPdfBtn" class="btn btn--secondary btn--lg hidden">
+                            Baixar PDF
+                        </button>
+                        <button type="button" id="clearFormBtn" class="btn btn--outline">
+                            Limpar Formulário
+                        </button>
+                    </div>
+                </section>
+            </form>
+        </main>
+
+        <!-- Messages -->
+        <div id="messageContainer" class="message-container"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
