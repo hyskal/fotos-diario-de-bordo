@@ -113,33 +113,18 @@
                 </div>
             </div>
 
-            <!-- NOVA SEÇÃO: Compartilhar Diário -->
+            <!-- SEÇÃO: Compartilhar (Apenas Email e Download) -->
             <div class="form-section">
                 <div class="card">
                     <div class="card__body">
                         <div class="section-header">
-                            <h2 data-section="share">📤 Compartilhar Diário</h2>
+                            <h2>📤 Compartilhar Diário</h2>
                             <div id="shareStatus" class="share-status hidden"></div>
                         </div>
                         
-                        <!-- Opções de Compartilhamento -->
+                        <!-- APENAS 2 OPÇÕES -->
                         <div class="share-options hidden" id="shareOptions">
                             <div class="share-grid">
-                                <!-- Web Share API -->
-                                <div class="share-option" id="webShareOption">
-                                    <button type="button" class="btn btn--primary share-btn" onclick="shareNatively()">
-                                        📱 Compartilhar
-                                    </button>
-                                    <small>Apps nativos (WhatsApp, Email, etc.)</small>
-                                </div>
-                                
-                                <!-- File.io Upload -->
-                                <div class="share-option">
-                                    <button type="button" class="btn btn--outline share-btn" onclick="uploadToFileIO()">
-                                        🌐 Gerar Link
-                                    </button>
-                                    <small>Link temporário (14 dias)</small>
-                                </div>
                                 
                                 <!-- EmailJS -->
                                 <div class="share-option">
@@ -156,6 +141,7 @@
                                     </button>
                                     <small>Salvar no dispositivo</small>
                                 </div>
+                                
                             </div>
                         </div>
                         
@@ -180,27 +166,13 @@
                             </div>
                         </div>
                         
-                        <!-- Resultado do Upload -->
-                        <div class="upload-result hidden" id="uploadResult">
-                            <div class="result-content">
-                                <h4>🎉 Arquivo Enviado!</h4>
-                                <div class="link-container">
-                                    <input type="text" class="form-control" id="shareLink" readonly>
-                                    <button type="button" class="btn btn--outline" onclick="copyLink()">📋 Copiar</button>
-                                </div>
-                                <div class="result-info">
-                                    <small>⏰ Link expira em <span id="expirationTime">14 dias</span> ou após primeiro download</small>
-                                </div>
-                            </div>
-                        </div>
-                        
                         <!-- Barra de Progresso -->
                         <div class="progress-container hidden" id="progressContainer">
                             <div class="progress-bar">
                                 <div class="progress-fill" id="progressFill"></div>
                                 <span class="progress-text" id="progressText">0%</span>
                             </div>
-                            <small class="progress-label" id="progressLabel">Preparando upload...</small>
+                            <small class="progress-label" id="progressLabel">Enviando email...</small>
                         </div>
                     </div>
                 </div>
@@ -211,7 +183,7 @@
                 <div class="card">
                     <div class="card__body">
                         <div class="form-actions">
-                            <button type="button" class="btn btn--primary btn--lg" id="generatePdfBtn" data-icon="file">
+                            <button type="button" class="btn btn--primary" id="generatePdfBtn" data-icon="file">
                                 <span id="generateBtnText">Gerar PDF</span>
                                 <span class="loading-spinner hidden" id="loadingSpinner"></span>
                             </button>
