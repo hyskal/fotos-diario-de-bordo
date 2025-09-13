@@ -6,7 +6,7 @@
     <title>Sistema de Diário de Bordo - CETEP/LNAB</title>
     
     <!-- CSS -->
-    <link rel="stylesheet" href="style-1.css">
+    <link rel="stylesheet" href="style-2.css">
     
     <!-- EmailJS SDK -->
     <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
@@ -140,8 +140,8 @@
                                 <span class="progress-text" id="progressText">0%</span>
                             </div>
                             <div class="progress-steps" id="progressSteps">
-                                <div class="progress-step active" id="step1">📄 Gerando PDF...</div>
-                                <div class="progress-step" id="step2">📤 Enviando arquivo...</div>
+                                <div class="progress-step" id="step1">📄 Gerando PDF...</div>
+                                <div class="progress-step" id="step2">🌐 Hospedando no GitHub...</div>
                                 <div class="progress-step" id="step3">📧 Enviando email...</div>
                             </div>
                         </div>
@@ -163,7 +163,8 @@
             <div class="popup-details" id="popupDetails">
                 <p>📧 <strong>Enviado para:</strong> <span id="sentToEmail"></span></p>
                 <p>📎 <strong>Assunto:</strong> <span id="emailSubject"></span></p>
-                <p>🔗 <strong>Link expira em:</strong> 14 dias</p>
+                <p>🔗 <strong>Link:</strong> <a href="#" id="gistLink" target="_blank">Clique para ver o arquivo</a></p>
+                <p>💾 <strong>Hospedagem:</strong> GitHub (permanente)</p>
             </div>
             <button class="btn btn--primary" onclick="closeSuccessPopup()">OK</button>
         </div>
