@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
   build_and_deploy:
@@ -24,27 +21,23 @@ jobs:
     - name: 📦 Install Firebase CLI
       run: npm install -g firebase-tools
       
+    - name: 🔍 Debug Token (Remove after working)
+      run: |
+        echo "Token length: ${#FIREBASE_TOKEN}"
+        echo "Token starts with: ${FIREBASE_TOKEN:0:10}..."
+      env:
+        FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        
     - name: 🧪 Validate Project Files
       run: |
         echo "🔍 Checking project structure..."
         ls -la
-        echo "✅ Validating required files:"
-        test -f index.html && echo "  ✅ index.html found" || (echo "  ❌ index.html missing" && exit 1)
-        test -f style.css && echo "  ✅ style.css found" || (echo "  ❌ style.css missing" && exit 1)
-        test -f app.js && echo "  ✅ app.js found" || (echo "  ❌ app.js missing" && exit 1)
-        test -f firebase.json && echo "  ✅ firebase.json found" || (echo "  ❌ firebase.json missing" && exit 1)
-        echo "🎉 All required files validated!"
+        test -f index.html && echo "✅ index.html" || exit 1
+        test -f style.css && echo "✅ style.css" || exit 1
+        test -f app.js && echo "✅ app.js" || exit 1
+        test -f firebase.json && echo "✅ firebase.json" || exit 1
         
     - name: 🚀 Deploy to Firebase Hosting
-      run: |
-        firebase deploy --only hosting --token ${{ secrets.FIREBASE_TOKEN }} --project diario-de-bordo-cetep
+      run: firebase deploy --only hosting --project diario-de-bordo-cetep
       env:
         FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        
-    - name: 🎉 Deployment Success
-      run: |
-        echo "🎉 Deploy completed successfully!"
-        echo "🌐 Live URL: https://diario-de-bordo-cetep.web.app"
-        echo "📅 Deployed at: $(date)"
-        echo "🔗 Commit SHA: ${{ github.sha }}"
-        echo "👤 Triggered by: ${{ github.actor }}"
