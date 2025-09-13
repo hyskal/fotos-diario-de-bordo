@@ -10,9 +10,10 @@ const CONFIG = {
         maxHeight: 600,
         quality: 0.8
     },
-    upload: {
-        fileIOUrl: 'https://file.io',
-        expirationDays: '14d'
+    github: {
+        apiUrl: 'https://api.github.com/gists',
+        maxFileSize: 8388608, // 8MB (considerando overhead do base64)
+        rateLimitPerHour: 60
     },
     emailJS: {
         serviceId: 'service_1leur7g',
@@ -29,15 +30,17 @@ const MESSAGES = {
     fillRequired: 'Preencha todos os campos obrigatórios.',
     processing: 'Processando...',
     maxStudents: 'Máximo de 10 estudantes permitidos.',
-    noInternet: 'Erro de conexão. Verifique sua internet.',
-    uploadError: 'Falha no upload do arquivo.',
-    emailError: 'Falha ao enviar email.'
+    uploadError: 'Falha ao hospedar arquivo no GitHub.',
+    emailError: 'Falha ao enviar email.',
+    fileTooLarge: 'PDF muito grande para upload. Reduza o número de fotos.',
+    rateLimitExceeded: 'Limite de uploads atingido (60/hora). Tente novamente em uma hora.'
 };
 
 // Estado da aplicação
 let selectedPhotos = [];
 let generatedPdfBlob = null;
 let elements = {};
+let uploadCount = 0; // Contador de uploads
 
 // === INICIALIZAÇÃO ===
 document.addEventListener('DOMContentLoaded', function() {
@@ -46,12 +49,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Inicializar EmailJS
     if (typeof emailjs !== 'undefined') {
         emailjs.init(CONFIG.emailJS.publicKey);
-        console.log('EmailJS inicializado');
+        console.log('EmailJS inicializado com GitHub Gist');
     }
+    
+    // Recuperar contador de uploads do localStorage
+    uploadCount = parseInt(localStorage.getItem('uploadCount') || '0');
     
     initializeElements();
     initializeEventListeners();
     updatePhotoCounter();
+    checkRateLimit();
 });
 
 function initializeElements() {
@@ -78,7 +85,8 @@ function initializeElements() {
         progressSteps: document.getElementById('progressSteps'),
         successPopup: document.getElementById('successPopup'),
         sentToEmail: document.getElementById('sentToEmail'),
-        emailSubject: document.getElementById('emailSubject')
+        emailSubject: document.getElementById('emailSubject'),
+        gistLink: document.getElementById('gistLink')
     };
     
     console.log('Elementos inicializados:', elements);
@@ -151,6 +159,33 @@ function initializeEventListeners() {
 function preventDefaults(e) {
     e.preventDefault();
     e.stopPropagation();
+}
+
+// === VERIFICAÇÃO DE RATE LIMIT ===
+function checkRateLimit() {
+    const lastResetTime = parseInt(localStorage.getItem('lastResetTime') || '0');
+    const currentTime = Date.now();
+    
+    // Reset contador a cada hora
+    if (currentTime - lastResetTime > 3600000) { // 1 hora em ms
+        uploadCount = 0;
+        localStorage.setItem('uploadCount', '0');
+        localStorage.setItem('lastResetTime', currentTime.toString());
+    }
+    
+    // Mostrar aviso se próximo do limite
+    if (uploadCount >= 50) {
+        showMessage(`Atenção: ${uploadCount}/60 uploads utilizados nesta hora`, 'warning');
+    }
+}
+
+function incrementUploadCount() {
+    uploadCount++;
+    localStorage.setItem('uploadCount', uploadCount.toString());
+    
+    if (uploadCount >= CONFIG.github.rateLimitPerHour) {
+        throw new Error(MESSAGES.rateLimitExceeded);
+    }
 }
 
 // === GERENCIAMENTO DE ESTUDANTES ===
@@ -321,6 +356,12 @@ async function generateAndSendPDF() {
         return;
     }
 
+    // Verificar rate limit
+    if (uploadCount >= CONFIG.github.rateLimitPerHour) {
+        showMessage(MESSAGES.rateLimitExceeded, 'error');
+        return;
+    }
+
     try {
         // Mostrar loading
         setLoadingState(true);
@@ -328,28 +369,33 @@ async function generateAndSendPDF() {
 
         // ETAPA 1: Gerar PDF
         updateProgressStep(1, 'active');
-        updateProgressBar(20, 'Gerando PDF...');
+        updateProgressBar(25, 'Gerando PDF...');
         
         const pdfBlob = await generatePDF();
         generatedPdfBlob = pdfBlob;
         
-        updateProgressStep(1, 'completed');
-        updateProgressBar(40, 'PDF gerado com sucesso!');
-
-        // ETAPA 2: Upload para servidor
-        updateProgressStep(2, 'active');
-        updateProgressBar(60, 'Enviando arquivo para servidor...');
+        // Verificar tamanho do arquivo
+        if (pdfBlob.size > CONFIG.github.maxFileSize) {
+            throw new Error(MESSAGES.fileTooLarge);
+        }
         
-        const downloadLink = await uploadToFileIO(pdfBlob);
+        updateProgressStep(1, 'completed');
+        updateProgressBar(50, 'PDF gerado!');
+
+        // ETAPA 2: Upload para GitHub Gist
+        updateProgressStep(2, 'active');
+        updateProgressBar(75, 'Hospedando no GitHub...');
+        
+        const gistUrl = await uploadToGitHub(pdfBlob);
         
         updateProgressStep(2, 'completed');
-        updateProgressBar(80, 'Arquivo enviado!');
+        updateProgressBar(90, 'Arquivo hospedado!');
 
-        // ETAPA 3: Enviar email
+        // ETAPA 3: Enviar email com link
         updateProgressStep(3, 'active');
-        updateProgressBar(90, 'Enviando email...');
+        updateProgressBar(95, 'Enviando email...');
         
-        await sendAutomaticEmail(downloadLink);
+        await sendEmailWithLink(gistUrl);
         
         updateProgressStep(3, 'completed');
         updateProgressBar(100, 'Concluído!');
@@ -358,7 +404,7 @@ async function generateAndSendPDF() {
         setTimeout(() => {
             hideProgress();
             setLoadingState(false);
-            showSuccessPopup(downloadLink);
+            showSuccessPopup(gistUrl);
         }, 1000);
 
     } catch (error) {
@@ -366,6 +412,73 @@ async function generateAndSendPDF() {
         hideProgress();
         setLoadingState(false);
         showMessage(`Erro: ${error.message}`, 'error');
+    }
+}
+
+// === UPLOAD PARA GITHUB GIST ===
+async function uploadToGitHub(pdfBlob) {
+    const fileName = generatePdfFileName();
+    
+    try {
+        // Incrementar contador (pode lançar exceção se limite atingido)
+        incrementUploadCount();
+        
+        // 1. Converter PDF para Base64
+        const base64Data = await blobToBase64(pdfBlob);
+        
+        // 2. Preparar dados para GitHub API
+        const gistData = {
+            description: `Diário de Bordo - ${getTurma()} - ${new Date().toLocaleDateString('pt-BR')}`,
+            public: true,
+            files: {
+                [fileName]: {
+                    content: base64Data
+                }
+            }
+        };
+
+        // 3. Enviar para GitHub API
+        const response = await fetch(CONFIG.github.apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'CETEP-DiarioBordo/1.0'
+            },
+            body: JSON.stringify(gistData)
+        });
+
+        // 4. Processar resposta
+        if (!response.ok) {
+            // Tratar diferentes códigos de erro
+            if (response.status === 403) {
+                throw new Error('Limite de uploads do GitHub atingido. Tente novamente mais tarde.');
+            } else if (response.status === 422) {
+                throw new Error('Arquivo muito grande ou formato inválido.');
+            } else {
+                throw new Error(`Erro GitHub API: ${response.status} - ${response.statusText}`);
+            }
+        }
+
+        const result = await response.json();
+        
+        if (result.html_url) {
+            console.log(`Gist criado: ${result.html_url}`);
+            return result.html_url;
+        } else {
+            throw new Error('Resposta inválida da API do GitHub');
+        }
+        
+    } catch (error) {
+        console.error('Erro no upload GitHub:', error);
+        
+        // Decrementar contador se falhou
+        if (uploadCount > 0) {
+            uploadCount--;
+            localStorage.setItem('uploadCount', uploadCount.toString());
+        }
+        
+        throw new Error(error.message || MESSAGES.uploadError);
     }
 }
 
@@ -441,38 +554,8 @@ async function addPhotosToPDF(pdf, startX, startY) {
     }
 }
 
-// === UPLOAD PARA FILE.IO ===
-async function uploadToFileIO(pdfBlob) {
-    const fileName = generatePdfFileName();
-    const formData = new FormData();
-    formData.append('file', pdfBlob, fileName);
-
-    try {
-        const response = await fetch(`${CONFIG.upload.fileIOUrl}?expires=${CONFIG.upload.expirationDays}`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        
-        if (result.success) {
-            return result.link;
-        } else {
-            throw new Error(result.message || 'Erro desconhecido no upload');
-        }
-        
-    } catch (error) {
-        console.error('Erro no upload:', error);
-        throw new Error(MESSAGES.uploadError);
-    }
-}
-
-// === EMAIL AUTOMÁTICO ===
-async function sendAutomaticEmail(downloadLink) {
+// === EMAIL COM LINK DO GIST ===
+async function sendEmailWithLink(gistUrl) {
     const turma = getTurma();
     const estudantes = getStudentNames();
     const professorEmail = getProfessorEmail();
@@ -485,12 +568,24 @@ Segue o diário de bordo da turma ${turma}.
 Estudantes: ${estudantes}
 Data: ${new Date().toLocaleString('pt-BR')}
 
-Link para download: ${downloadLink}
+🔗 Link para download do PDF:
+${gistUrl}
 
-Este link expira em 14 dias ou após o primeiro download.
+📌 Como baixar o arquivo:
+1. Clique no link acima
+2. Procure pelo arquivo PDF na página
+3. Clique no botão "Raw" ou "Download"
+4. O PDF será baixado automaticamente
+
+Este link é permanente e não expira.
+Hospedado com segurança no GitHub.
 
 Atenciosamente,
-Sistema CETEP/LNAB`;
+Sistema CETEP/LNAB
+
+---
+Gerado em ${new Date().toLocaleString('pt-BR')}
+Upload #${uploadCount} desta hora`;
 
     const templateParams = {
         to_email: professorEmail,
@@ -498,7 +593,7 @@ Sistema CETEP/LNAB`;
         message: emailBody,
         turma: turma,
         estudantes: estudantes,
-        download_link: downloadLink,
+        download_link: gistUrl,
         data: new Date().toLocaleString('pt-BR')
     };
 
@@ -509,13 +604,23 @@ Sistema CETEP/LNAB`;
             templateParams
         );
         
-        console.log('Email enviado com sucesso:', response);
-        return { success: true, subject, professorEmail };
+        console.log('Email com link GitHub enviado:', response);
+        return { success: true, subject, professorEmail, link: gistUrl };
         
     } catch (error) {
         console.error('Erro ao enviar email:', error);
         throw new Error(MESSAGES.emailError);
     }
+}
+
+// === FUNÇÕES AUXILIARES ===
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
 }
 
 // === FUNÇÕES DE PROGRESS E UI ===
@@ -548,18 +653,20 @@ function resetProgressSteps() {
 }
 
 // === POPUP DE SUCESSO ===
-function showSuccessPopup(downloadLink) {
+function showSuccessPopup(gistUrl) {
     const professorEmail = getProfessorEmail();
     const subject = `${getTurma()} - ${getStudentNames()}`;
     
     elements.sentToEmail.textContent = professorEmail;
     elements.emailSubject.textContent = subject;
+    elements.gistLink.href = gistUrl;
+    elements.gistLink.textContent = gistUrl;
     elements.successPopup.classList.remove('hidden');
     
-    // Auto-fechar após 10 segundos
+    // Auto-fechar após 15 segundos
     setTimeout(() => {
         closeSuccessPopup();
-    }, 10000);
+    }, 15000);
 }
 
 function closeSuccessPopup() {
@@ -599,7 +706,7 @@ function generatePdfFileName() {
     const turma = getTurma().replace(/[^a-zA-Z0-9]/g, '-');
     const students = getStudentNames().substring(0, 20).replace(/[^a-zA-Z0-9]/g, '-');
     
-    return `${day}${month}${year}-${turma}-${students}.pdf`;
+    return `DiarioBordo-${day}${month}${year}-${turma}-${students}.pdf`;
 }
 
 function setLoadingState(isLoading) {
@@ -682,4 +789,4 @@ function clearForm() {
 window.removePhoto = removePhoto;
 window.closeSuccessPopup = closeSuccessPopup;
 
-console.log('Sistema Diário de Bordo inicializado com fluxo automático');
+console.log(`Sistema Diário de Bordo inicializado - GitHub Gist (${uploadCount}/60 uploads usados)`);
