@@ -10,10 +10,10 @@ const CONFIG = {
         maxHeight: 600,
         quality: 0.8
     },
-    github: {
-        apiUrl: 'https://api.github.com/gists',
-        maxFileSize: 8388608, // 8MB (considerando overhead do base64)
-        rateLimitPerHour: 60
+    firebase: {
+        maxFileSize: 50485760, // 50MB - Firebase suporta bem mais
+        storagePath: 'diarios/',
+        urlExpiration: 7 * 24 * 60 * 60 * 1000 // 7 dias em ms
     },
     emailJS: {
         serviceId: 'service_1leur7g',
@@ -30,45 +30,52 @@ const MESSAGES = {
     fillRequired: 'Preencha todos os campos obrigatórios.',
     processing: 'Processando...',
     maxStudents: 'Máximo de 10 estudantes permitidos.',
-    uploadError: 'Falha ao hospedar arquivo no GitHub.',
+    uploadError: 'Falha ao hospedar arquivo no Firebase.',
     emailError: 'Falha ao enviar email.',
     fileTooLarge: 'PDF muito grande para upload. Reduza o número de fotos.',
-    rateLimitExceeded: 'Limite de uploads atingido (60/hora). Tente novamente em uma hora.'
+    firebaseError: 'Erro no Firebase Storage. Tente novamente.'
 };
 
 // Estado da aplicação
 let selectedPhotos = [];
 let generatedPdfBlob = null;
 let elements = {};
-let uploadCount = 0; // Contador de uploads
 
 // === INICIALIZAÇÃO ===
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM carregado, inicializando aplicação...');
     
-    // ✅ INICIALIZAÇÃO EMAILJS v4 ATUALIZADA
+    // Aguardar Firebase carregar
+    const checkFirebase = () => {
+        if (window.firebaseStorage) {
+            console.log('✅ Firebase Storage disponível');
+            initializeApp();
+        } else {
+            console.log('⏳ Aguardando Firebase...');
+            setTimeout(checkFirebase, 100);
+        }
+    };
+    
+    checkFirebase();
+});
+
+function initializeApp() {
+    // Inicializar EmailJS
     if (typeof emailjs !== 'undefined') {
         emailjs.init({
             publicKey: CONFIG.emailJS.publicKey,
-            blockHeadless: true,      // Bloquear bots headless
+            blockHeadless: true,
             limitRate: {
-                throttle: 10000,      // 10 segundos entre envios
+                throttle: 10000,
             }
         });
-        console.log('✅ EmailJS v4 inicializado com GitHub Gist');
-    } else {
-        console.error('❌ EmailJS não carregado');
-        showMessage('Erro: EmailJS não carregado', 'error');
+        console.log('✅ EmailJS v4 inicializado');
     }
-    
-    // Recuperar contador de uploads do localStorage
-    uploadCount = parseInt(localStorage.getItem('uploadCount') || '0');
     
     initializeElements();
     initializeEventListeners();
     updatePhotoCounter();
-    checkRateLimit();
-});
+}
 
 function initializeElements() {
     elements = {
@@ -95,7 +102,7 @@ function initializeElements() {
         successPopup: document.getElementById('successPopup'),
         sentToEmail: document.getElementById('sentToEmail'),
         emailSubject: document.getElementById('emailSubject'),
-        gistLink: document.getElementById('gistLink')
+        firebaseLink: document.getElementById('firebaseLink')
     };
     
     console.log('Elementos inicializados:', elements);
@@ -168,33 +175,6 @@ function initializeEventListeners() {
 function preventDefaults(e) {
     e.preventDefault();
     e.stopPropagation();
-}
-
-// === VERIFICAÇÃO DE RATE LIMIT ===
-function checkRateLimit() {
-    const lastResetTime = parseInt(localStorage.getItem('lastResetTime') || '0');
-    const currentTime = Date.now();
-    
-    // Reset contador a cada hora
-    if (currentTime - lastResetTime > 3600000) { // 1 hora em ms
-        uploadCount = 0;
-        localStorage.setItem('uploadCount', '0');
-        localStorage.setItem('lastResetTime', currentTime.toString());
-    }
-    
-    // Mostrar aviso se próximo do limite
-    if (uploadCount >= 50) {
-        showMessage(`Atenção: ${uploadCount}/60 uploads utilizados nesta hora`, 'warning');
-    }
-}
-
-function incrementUploadCount() {
-    uploadCount++;
-    localStorage.setItem('uploadCount', uploadCount.toString());
-    
-    if (uploadCount >= CONFIG.github.rateLimitPerHour) {
-        throw new Error(MESSAGES.rateLimitExceeded);
-    }
 }
 
 // === GERENCIAMENTO DE ESTUDANTES ===
@@ -365,12 +345,6 @@ async function generateAndSendPDF() {
         return;
     }
 
-    // Verificar rate limit
-    if (uploadCount >= CONFIG.github.rateLimitPerHour) {
-        showMessage(MESSAGES.rateLimitExceeded, 'error');
-        return;
-    }
-
     try {
         // Mostrar loading
         setLoadingState(true);
@@ -384,18 +358,18 @@ async function generateAndSendPDF() {
         generatedPdfBlob = pdfBlob;
         
         // Verificar tamanho do arquivo
-        if (pdfBlob.size > CONFIG.github.maxFileSize) {
+        if (pdfBlob.size > CONFIG.firebase.maxFileSize) {
             throw new Error(MESSAGES.fileTooLarge);
         }
         
         updateProgressStep(1, 'completed');
         updateProgressBar(50, 'PDF gerado!');
 
-        // ETAPA 2: Upload para GitHub Gist
+        // ETAPA 2: Upload para Firebase
         updateProgressStep(2, 'active');
-        updateProgressBar(75, 'Hospedando no GitHub...');
+        updateProgressBar(75, 'Enviando para Firebase...');
         
-        const gistUrl = await uploadToGitHub(pdfBlob);
+        const downloadUrl = await uploadToFirebase(pdfBlob);
         
         updateProgressStep(2, 'completed');
         updateProgressBar(90, 'Arquivo hospedado!');
@@ -404,7 +378,7 @@ async function generateAndSendPDF() {
         updateProgressStep(3, 'active');
         updateProgressBar(95, 'Enviando email...');
         
-        await sendEmailWithLink(gistUrl);
+        await sendEmailWithLink(downloadUrl);
         
         updateProgressStep(3, 'completed');
         updateProgressBar(100, 'Concluído!');
@@ -413,7 +387,7 @@ async function generateAndSendPDF() {
         setTimeout(() => {
             hideProgress();
             setLoadingState(false);
-            showSuccessPopup(gistUrl);
+            showSuccessPopup(downloadUrl);
         }, 1000);
 
     } catch (error) {
@@ -424,70 +398,50 @@ async function generateAndSendPDF() {
     }
 }
 
-// === UPLOAD PARA GITHUB GIST ===
-async function uploadToGitHub(pdfBlob) {
+// === ✅ UPLOAD PARA FIREBASE STORAGE ===
+async function uploadToFirebase(pdfBlob) {
     const fileName = generatePdfFileName();
+    const filePath = CONFIG.firebase.storagePath + fileName;
     
     try {
-        // Incrementar contador (pode lançar exceção se limite atingido)
-        incrementUploadCount();
+        console.log(`🔥 Iniciando upload para Firebase: ${filePath}`);
         
-        // 1. Converter PDF para Base64
-        const base64Data = await blobToBase64(pdfBlob);
+        // Criar referência do arquivo
+        const storageRef = window.firebaseRef(window.firebaseStorage, filePath);
         
-        // 2. Preparar dados para GitHub API
-        const gistData = {
-            description: `Diário de Bordo - ${getTurma()} - ${new Date().toLocaleDateString('pt-BR')}`,
-            public: true,
-            files: {
-                [fileName]: {
-                    content: base64Data
-                }
+        // Fazer upload do blob
+        const snapshot = await window.firebaseUploadBytes(storageRef, pdfBlob, {
+            contentType: 'application/pdf',
+            customMetadata: {
+                'turma': getTurma(),
+                'estudantes': getStudentNames(),
+                'data': new Date().toISOString(),
+                'sistema': 'diario-bordo-cetep'
             }
-        };
-
-        // 3. Enviar para GitHub API
-        const response = await fetch(CONFIG.github.apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'CETEP-DiarioBordo/1.0'
-            },
-            body: JSON.stringify(gistData)
         });
-
-        // 4. Processar resposta
-        if (!response.ok) {
-            // Tratar diferentes códigos de erro
-            if (response.status === 403) {
-                throw new Error('Limite de uploads do GitHub atingido. Tente novamente mais tarde.');
-            } else if (response.status === 422) {
-                throw new Error('Arquivo muito grande ou formato inválido.');
-            } else {
-                throw new Error(`Erro GitHub API: ${response.status} - ${response.statusText}`);
-            }
-        }
-
-        const result = await response.json();
         
-        if (result.html_url) {
-            console.log(`Gist criado: ${result.html_url}`);
-            return result.html_url;
-        } else {
-            throw new Error('Resposta inválida da API do GitHub');
-        }
+        console.log('✅ Upload concluído:', snapshot);
+        
+        // Obter URL de download
+        const downloadURL = await window.firebaseGetDownloadURL(snapshot.ref);
+        
+        console.log('✅ URL gerada:', downloadURL);
+        
+        return downloadURL;
         
     } catch (error) {
-        console.error('Erro no upload GitHub:', error);
+        console.error('❌ Erro no upload Firebase:', error);
         
-        // Decrementar contador se falhou
-        if (uploadCount > 0) {
-            uploadCount--;
-            localStorage.setItem('uploadCount', uploadCount.toString());
+        // Tratamento específico de erros Firebase
+        if (error.code === 'storage/unauthorized') {
+            throw new Error('Sem permissão para upload. Verifique as regras do Firebase.');
+        } else if (error.code === 'storage/canceled') {
+            throw new Error('Upload cancelado pelo usuário.');
+        } else if (error.code === 'storage/unknown') {
+            throw new Error('Erro desconhecido no Firebase. Tente novamente.');
+        } else {
+            throw new Error(error.message || MESSAGES.uploadError);
         }
-        
-        throw new Error(error.message || MESSAGES.uploadError);
     }
 }
 
@@ -563,8 +517,8 @@ async function addPhotosToPDF(pdf, startX, startY) {
     }
 }
 
-// === EMAIL COM LINK DO GIST - EmailJS v4 ===
-async function sendEmailWithLink(gistUrl) {
+// === EMAIL COM LINK FIREBASE ===
+async function sendEmailWithLink(downloadUrl) {
     const turma = getTurma();
     const estudantes = getStudentNames();
     const professorEmail = getProfessorEmail();
@@ -578,23 +532,22 @@ Estudantes: ${estudantes}
 Data: ${new Date().toLocaleString('pt-BR')}
 
 🔗 Link para download do PDF:
-${gistUrl}
+${downloadUrl}
 
-📌 Como baixar o arquivo:
+📌 Como baixar:
 1. Clique no link acima
-2. Procure pelo arquivo PDF na página
-3. Clique no botão "Raw" ou "Download"
-4. O PDF será baixado automaticamente
+2. O PDF será baixado automaticamente
+3. Ou clique com botão direito → "Salvar como"
 
-Este link é permanente e não expira.
-Hospedado com segurança no GitHub.
+Este arquivo está hospedado com segurança no Firebase (Google).
+O link é permanente e não expira.
 
 Atenciosamente,
 Sistema CETEP/LNAB
 
 ---
 Gerado em ${new Date().toLocaleString('pt-BR')}
-Upload #${uploadCount} desta hora`;
+Hospedado no Firebase Storage`;
 
     const templateParams = {
         to_email: professorEmail,
@@ -602,35 +555,24 @@ Upload #${uploadCount} desta hora`;
         message: emailBody,
         turma: turma,
         estudantes: estudantes,
-        download_link: gistUrl,
+        download_link: downloadUrl,
         data: new Date().toLocaleString('pt-BR')
     };
 
     try {
-        // ✅ CHAMADA EMAILJS v4 ATUALIZADA
         const response = await emailjs.send(
             CONFIG.emailJS.serviceId,
             CONFIG.emailJS.templateId,
             templateParams
         );
         
-        console.log('✅ Email com link GitHub enviado via EmailJS v4:', response);
-        return { success: true, subject, professorEmail, link: gistUrl };
+        console.log('✅ Email com link Firebase enviado:', response);
+        return { success: true, subject, professorEmail, link: downloadUrl };
         
     } catch (error) {
-        console.error('❌ Erro ao enviar email via EmailJS v4:', error);
+        console.error('❌ Erro ao enviar email:', error);
         throw new Error(`${MESSAGES.emailError} (${error.text || error.message})`);
     }
-}
-
-// === FUNÇÕES AUXILIARES ===
-function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
 }
 
 // === FUNÇÕES DE PROGRESS E UI ===
@@ -663,14 +605,14 @@ function resetProgressSteps() {
 }
 
 // === POPUP DE SUCESSO ===
-function showSuccessPopup(gistUrl) {
+function showSuccessPopup(downloadUrl) {
     const professorEmail = getProfessorEmail();
     const subject = `${getTurma()} - ${getStudentNames()}`;
     
     elements.sentToEmail.textContent = professorEmail;
     elements.emailSubject.textContent = subject;
-    elements.gistLink.href = gistUrl;
-    elements.gistLink.textContent = gistUrl;
+    elements.firebaseLink.href = downloadUrl;
+    elements.firebaseLink.textContent = 'Clique para baixar PDF';
     elements.successPopup.classList.remove('hidden');
     
     // Auto-fechar após 15 segundos
@@ -799,4 +741,4 @@ function clearForm() {
 window.removePhoto = removePhoto;
 window.closeSuccessPopup = closeSuccessPopup;
 
-console.log(`✅ Sistema Diário de Bordo inicializado - GitHub Gist + EmailJS v4 (${uploadCount}/60 uploads usados)`);
+console.log('✅ Sistema Diário de Bordo inicializado - Firebase Storage + EmailJS v4');
