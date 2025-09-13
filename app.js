@@ -434,7 +434,62 @@ function showSuccessPopup() {
 
 function closePopup() {
     elements.successPopup.style.display = 'none';
+    
+    // 🧹 LIMPAR TODOS OS CAMPOS PARA NOVO ENVIO
+    clearAllFields();
 }
+
+// === NOVA FUNÇÃO: LIMPAR CAMPOS COMPLETO ===
+function clearAllFields() {
+    // Limpar campo turma
+    if (elements.turmaInput) {
+        elements.turmaInput.value = '';
+    }
+    
+    // Resetar container de estudantes para apenas 1 campo vazio
+    if (elements.studentsContainer) {
+        elements.studentsContainer.innerHTML = `
+            <div class="student-input">
+                <input type="text" class="student-name" placeholder="Nome completo do estudante" required>
+                <button type="button" class="remove-student-btn" onclick="removeStudent(this)" style="display: none;">✕</button>
+            </div>
+        `;
+    }
+    
+    // Limpar fotos selecionadas
+    selectedPhotos = [];
+    updatePhotoPreview();
+    updatePhotoCounter();
+    
+    // Limpar input de arquivo
+    if (elements.photoInput) {
+        elements.photoInput.value = '';
+    }
+    
+    // Limpar estados globais
+    generatedPdfBlob = null;
+    currentDownloadUrl = '';
+    
+    // Remover classes de drag-over se existir
+    if (elements.dropZone) {
+        elements.dropZone.classList.remove('drag-over');
+    }
+    
+    // Garantir que botão está habilitado
+    if (elements.generateBtn) {
+        elements.generateBtn.disabled = false;
+        elements.generateBtn.textContent = '🚀 Gerar PDF e Enviar para Professor';
+    }
+    
+    // Scroll para o topo suave
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+    
+    console.log('✅ Campos limpos - Pronto para novo envio');
+}
+
 
 function downloadLocalPDF() {
     if (generatedPdfBlob) {
