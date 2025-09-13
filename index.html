@@ -5,21 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Diário de Bordo - CETEP/LNAB</title>
     
-    <!-- CSS -->
+    <!-- CSS Limpo -->
     <link rel="stylesheet" href="style.css">
-    
-    <!-- EmailJS SDK v4 -->
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     
     <!-- jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
-    <!-- ✅ Firebase SDK v9 -->
+    <!-- Firebase SDK v9 -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
         
-        // ✅ Sua configuração Firebase existente
         const firebaseConfig = {
             apiKey: "AIzaSyD0vFDHBkjGAdTSzY7TtdbDGX-9BUiJEbk",
             authDomain: "diario-de-bordo-cetep.firebaseapp.com",
@@ -29,176 +25,117 @@
             appId: "1:106679083009:web:c51bae8358c727f33be000"
         };
         
-        // Inicializar Firebase
         const app = initializeApp(firebaseConfig);
         const storage = getStorage(app);
         
-        // Disponibilizar globalmente
         window.firebaseStorage = storage;
         window.firebaseRef = ref;
         window.firebaseUploadBytes = uploadBytes;
         window.firebaseGetDownloadURL = getDownloadURL;
         
-        console.log('✅ Firebase inicializado com projeto diario-de-bordo-cetep');
+        console.log('✅ Firebase inicializado - Sistema Limpo');
     </script>
 </head>
 <body>
-    <!-- Header -->
     <header class="header">
-        <div class="header__content container">
-            <div class="header__logo">
-                <div class="logo">CETEP/LNAB</div>
-            </div>
-            <div class="header__title">
-                <h1>Sistema de Diário de Bordo</h1>
-                <p class="subtitle">Centro Territorial de Educação Profissional do Litoral Norte e Agreste Baiano</p>
-            </div>
+        <div class="container">
+            <div class="logo">CETEP/LNAB</div>
+            <h1>Sistema de Diário de Bordo</h1>
+            <p class="subtitle">Centro Territorial de Educação Profissional do Litoral Norte e Agreste Baiano</p>
         </div>
     </header>
 
-    <!-- Container Principal -->
     <main class="main">
-        <form id="diaryForm" novalidate>
+        <div class="container">
             
-            <!-- Seção: Informações da Turma -->
-            <div class="form-section">
-                <div class="card">
-                    <div class="card__body">
-                        <div class="section-header">
-                            <h2>📋 Informações da Turma</h2>
+            <!-- Formulário Principal -->
+            <form id="diaryForm" class="form">
+                
+                <!-- Informações Básicas -->
+                <section class="form-section">
+                    <h2>📋 Informações</h2>
+                    
+                    <div class="form-group">
+                        <label for="turma">Turma *</label>
+                        <input type="text" id="turma" placeholder="Ex: Técnico em Informática 2025.1" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Estudantes *</label>
+                        <div id="studentsContainer" class="students-container">
+                            <div class="student-input">
+                                <input type="text" class="student-name" placeholder="Nome completo do estudante" required>
+                                <button type="button" class="remove-student-btn" style="display: none;">✕</button>
+                            </div>
                         </div>
-                        
-                        <div class="form-group">
-                            <label for="turma" class="form-label">Nome da Turma *</label>
-                            <input type="text" id="turma" class="form-control" placeholder="Ex: Técnico em Informática 2025.1" required>
-                        </div>
+                        <button type="button" id="addStudentBtn" class="btn-secondary">➕ Adicionar Estudante</button>
+                    </div>
+                </section>
 
-                        <div class="form-group">
-                            <label for="professorEmail" class="form-label">Email do Professor *</label>
-                            <input type="email" id="professorEmail" class="form-control" placeholder="professor@cetep.edu.br" required>
+                <!-- Upload de Fotos -->
+                <section class="form-section">
+                    <h2>📷 Fotos do Diário (até 6)</h2>
+                    
+                    <div class="drop-zone" id="dropZone">
+                        <div class="drop-zone-content">
+                            <div class="drop-icon">🖼️</div>
+                            <p>Arraste e solte suas fotos aqui</p>
+                            <small>ou clique para selecionar (JPG, PNG - máx 10MB cada)</small>
                         </div>
                     </div>
+                    
+                    <input type="file" id="photoInput" accept="image/jpeg,image/png" multiple style="display: none;">
+                    
+                    <div class="photo-counter" id="photoCounter">0 / 6 fotos</div>
+                    
+                    <!-- Preview das Fotos -->
+                    <div id="photosPreview" class="photos-preview" style="display: none;">
+                        <h3>Fotos Selecionadas:</h3>
+                        <div id="photosGrid" class="photos-grid"></div>
+                    </div>
+                </section>
+
+                <!-- Botão Principal -->
+                <section class="form-section">
+                    <button type="button" id="generateBtn" class="btn-primary">
+                        🚀 Gerar PDF e Enviar para Professor
+                    </button>
+                </section>
+
+            </form>
+
+            <!-- Progress Bar -->
+            <div id="progressContainer" class="progress-container" style="display: none;">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                    <span id="progressText" class="progress-text">0%</span>
+                </div>
+                <div class="progress-steps">
+                    <div id="step1" class="progress-step">📄 Gerando PDF...</div>
+                    <div id="step2" class="progress-step">🔥 Enviando para Professor...</div>
                 </div>
             </div>
 
-            <!-- Seção: Estudantes -->
-            <div class="form-section">
-                <div class="card">
-                    <div class="card__body">
-                        <div class="section-header">
-                            <h2 data-section="students">Estudantes</h2>
-                            <button type="button" class="btn btn--outline" id="addStudentBtn" data-icon="plus">
-                                Adicionar Estudante
-                            </button>
-                        </div>
-                        
-                        <div class="students-container" id="studentsContainer">
-                            <!-- Primeiro campo de estudante -->
-                            <div class="student-input-group">
-                                <div class="form-group">
-                                    <label class="form-label">Nome do Estudante</label>
-                                    <input type="text" class="form-control student-name" placeholder="Digite o nome completo" required>
-                                </div>
-                                <button type="button" class="remove-student-btn">
-                                    Remover
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Seção: Upload de Fotos -->
-            <div class="form-section">
-                <div class="card">
-                    <div class="card__body">
-                        <div class="section-header">
-                            <h2 data-section="photos">Fotos do Diário</h2>
-                        </div>
-                        
-                        <div class="photo-upload-area">
-                            <div class="drop-zone" id="dropZone" tabindex="0">
-                                <div class="drop-zone__icon">🖼️</div>
-                                <div class="drop-zone__content">
-                                    <h3>Arraste e solte suas fotos aqui</h3>
-                                    <p>ou clique para selecionar arquivos (JPG, PNG - máx 10MB cada)</p>
-                                </div>
-                            </div>
-                            
-                            <input type="file" id="photoInput" accept="image/jpeg,image/jpg,image/png" multiple hidden>
-                            
-                            <div class="upload-actions">
-                                <button type="button" class="btn btn--outline" id="selectPhotosBtn" data-icon="image">
-                                    Selecionar Fotos
-                                </button>
-                                <div class="photo-counter" id="photoCount">0 / 6</div>
-                            </div>
-                        </div>
-
-                        <!-- Preview das Fotos -->
-                        <div class="photos-preview hidden" id="photosPreview">
-                            <h4>Fotos Selecionadas:</h4>
-                            <div class="photos-grid" id="photosGrid">
-                                <!-- Fotos serão inseridas aqui via JavaScript -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Ações do Formulário -->
-            <div class="form-section">
-                <div class="card">
-                    <div class="card__body">
-                        <div class="form-actions">
-                            <button type="button" class="btn btn--primary btn--lg" id="generateAndSendBtn">
-                                <span id="generateBtnText">🚀 Gerar PDF e Enviar</span>
-                                <span class="loading-spinner hidden" id="loadingSpinner"></span>
-                            </button>
-                            
-                            <button type="button" class="btn btn--outline" id="clearFormBtn" data-icon="refresh">
-                                Limpar Formulário
-                            </button>
-                        </div>
-
-                        <!-- Barra de Progresso -->
-                        <div class="progress-container hidden" id="progressContainer">
-                            <div class="progress-bar">
-                                <div class="progress-fill" id="progressFill"></div>
-                                <span class="progress-text" id="progressText">0%</span>
-                            </div>
-                            <div class="progress-steps" id="progressSteps">
-                                <div class="progress-step" id="step1">📄 Gerando PDF...</div>
-                                <div class="progress-step" id="step2">🔥 Enviando para Firebase...</div>
-                                <div class="progress-step" id="step3">📧 Enviando email...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </form>
+        </div>
     </main>
 
-    <!-- Container para Mensagens -->
-    <div id="messageContainer" class="message-container"></div>
-
     <!-- Popup de Sucesso -->
-    <div id="successPopup" class="popup-overlay hidden">
+    <div id="successPopup" class="popup-overlay" style="display: none;">
         <div class="popup-content">
             <div class="popup-icon">✅</div>
-            <h3>Email Enviado com Sucesso!</h3>
-            <div class="popup-details" id="popupDetails">
-                <p>📧 <strong>Enviado para:</strong> <span id="sentToEmail"></span></p>
-                <p>📎 <strong>Assunto:</strong> <span id="emailSubject"></span></p>
-                <p>🔗 <strong>Link:</strong> <a href="#" id="firebaseLink" target="_blank">Clique para baixar PDF</a></p>
-                <p>🔥 <strong>Hospedagem:</strong> Firebase (Google)</p>
+            <h3>SUCESSO!</h3>
+            <div class="popup-details">
+                <p>📤 <strong>Enviado para professor</strong></p>
+                <p>📎 <strong>Arquivo:</strong> <span id="fileName"></span></p>
+                <p>🔥 <strong>Hospedagem:</strong> Firebase (seguro)</p>
             </div>
-            <button class="btn btn--primary" onclick="closeSuccessPopup()">OK</button>
+            <div class="popup-actions">
+                <button id="downloadPdfBtn" class="btn-primary">💾 Baixar Cópia Local</button>
+                <button onclick="closePopup()" class="btn-secondary">OK</button>
+            </div>
         </div>
     </div>
 
-    <!-- JavaScript -->
     <script src="app.js"></script>
 </body>
 </html>
