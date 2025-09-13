@@ -8,11 +8,39 @@
     <!-- CSS -->
     <link rel="stylesheet" href="style.css">
     
-    <!-- ✅ EmailJS SDK v4 ATUALIZADO -->
+    <!-- EmailJS SDK v4 -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     
     <!-- jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- ✅ Firebase SDK v9 -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+        import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+        
+        // ✅ Sua configuração Firebase existente
+        const firebaseConfig = {
+            apiKey: "AIzaSyD0vFDHBkjGAdTSzY7TtdbDGX-9BUiJEbk",
+            authDomain: "diario-de-bordo-cetep.firebaseapp.com",
+            projectId: "diario-de-bordo-cetep",
+            storageBucket: "diario-de-bordo-cetep.firebasestorage.app",
+            messagingSenderId: "106679083009",
+            appId: "1:106679083009:web:c51bae8358c727f33be000"
+        };
+        
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const storage = getStorage(app);
+        
+        // Disponibilizar globalmente
+        window.firebaseStorage = storage;
+        window.firebaseRef = ref;
+        window.firebaseUploadBytes = uploadBytes;
+        window.firebaseGetDownloadURL = getDownloadURL;
+        
+        console.log('✅ Firebase inicializado com projeto diario-de-bordo-cetep');
+    </script>
 </head>
 <body>
     <!-- Header -->
@@ -141,7 +169,7 @@
                             </div>
                             <div class="progress-steps" id="progressSteps">
                                 <div class="progress-step" id="step1">📄 Gerando PDF...</div>
-                                <div class="progress-step" id="step2">🌐 Hospedando no GitHub...</div>
+                                <div class="progress-step" id="step2">🔥 Enviando para Firebase...</div>
                                 <div class="progress-step" id="step3">📧 Enviando email...</div>
                             </div>
                         </div>
@@ -163,8 +191,8 @@
             <div class="popup-details" id="popupDetails">
                 <p>📧 <strong>Enviado para:</strong> <span id="sentToEmail"></span></p>
                 <p>📎 <strong>Assunto:</strong> <span id="emailSubject"></span></p>
-                <p>🔗 <strong>Link:</strong> <a href="#" id="gistLink" target="_blank">Clique para ver o arquivo</a></p>
-                <p>💾 <strong>Hospedagem:</strong> GitHub (permanente)</p>
+                <p>🔗 <strong>Link:</strong> <a href="#" id="firebaseLink" target="_blank">Clique para baixar PDF</a></p>
+                <p>🔥 <strong>Hospedagem:</strong> Firebase (Google)</p>
             </div>
             <button class="btn btn--primary" onclick="closeSuccessPopup()">OK</button>
         </div>
