@@ -44,6 +44,11 @@
                             <label for="turma" class="form-label">Nome da Turma *</label>
                             <input type="text" id="turma" class="form-control" placeholder="Ex: Técnico em Informática 2025.1" required>
                         </div>
+
+                        <div class="form-group">
+                            <label for="professorEmail" class="form-label">Email do Professor *</label>
+                            <input type="email" id="professorEmail" class="form-control" placeholder="professor@cetep.edu.br" required>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -113,88 +118,32 @@
                 </div>
             </div>
 
-            <!-- SEÇÃO: Compartilhar (Apenas Email e Download) -->
+            <!-- Ações do Formulário -->
             <div class="form-section">
                 <div class="card">
                     <div class="card__body">
-                        <div class="section-header">
-                            <h2>📤 Compartilhar Diário</h2>
-                            <div id="shareStatus" class="share-status hidden"></div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn--primary btn--lg" id="generateAndSendBtn">
+                                <span id="generateBtnText">🚀 Gerar PDF e Enviar</span>
+                                <span class="loading-spinner hidden" id="loadingSpinner"></span>
+                            </button>
+                            
+                            <button type="button" class="btn btn--outline" id="clearFormBtn" data-icon="refresh">
+                                Limpar Formulário
+                            </button>
                         </div>
-                        
-                        <!-- APENAS 2 OPÇÕES -->
-                        <div class="share-options hidden" id="shareOptions">
-                            <div class="share-grid">
-                                
-                                <!-- EmailJS -->
-                                <div class="share-option">
-                                    <button type="button" class="btn btn--outline share-btn" onclick="showEmailForm()">
-                                        📧 Enviar Email
-                                    </button>
-                                    <small>Direto para professor</small>
-                                </div>
-                                
-                                <!-- Download Local -->
-                                <div class="share-option">
-                                    <button type="button" class="btn btn--secondary share-btn" onclick="downloadPDF()">
-                                        💾 Download
-                                    </button>
-                                    <small>Salvar no dispositivo</small>
-                                </div>
-                                
-                            </div>
-                        </div>
-                        
-                        <!-- Formulário de Email -->
-                        <div class="email-form hidden" id="emailForm">
-                            <h4>📧 Enviar por Email</h4>
-                            <div class="form-group">
-                                <label class="form-label">Seu email:</label>
-                                <input type="email" class="form-control" id="senderEmail" placeholder="seuemail@exemplo.com" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Email do professor:</label>
-                                <input type="email" class="form-control" id="teacherEmail" placeholder="professor@cetep.edu.br" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Mensagem (opcional):</label>
-                                <textarea class="form-control" id="emailMessage" rows="3" placeholder="Prezado professor, segue meu diário de bordo..."></textarea>
-                            </div>
-                            <div class="email-actions">
-                                <button type="button" class="btn btn--primary" onclick="sendViaEmail()">📧 Enviar Email</button>
-                                <button type="button" class="btn btn--outline" onclick="hideEmailForm()">Cancelar</button>
-                            </div>
-                        </div>
-                        
+
                         <!-- Barra de Progresso -->
                         <div class="progress-container hidden" id="progressContainer">
                             <div class="progress-bar">
                                 <div class="progress-fill" id="progressFill"></div>
                                 <span class="progress-text" id="progressText">0%</span>
                             </div>
-                            <small class="progress-label" id="progressLabel">Enviando email...</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Ações do Formulário -->
-            <div class="form-section">
-                <div class="card">
-                    <div class="card__body">
-                        <div class="form-actions">
-                            <button type="button" class="btn btn--primary" id="generatePdfBtn" data-icon="file">
-                                <span id="generateBtnText">Gerar PDF</span>
-                                <span class="loading-spinner hidden" id="loadingSpinner"></span>
-                            </button>
-                            
-                            <button type="button" class="btn btn--secondary" id="downloadPdfBtn" data-icon="download">
-                                Baixar PDF
-                            </button>
-                            
-                            <button type="button" class="btn btn--outline" id="clearFormBtn" data-icon="refresh">
-                                Limpar Formulário
-                            </button>
+                            <div class="progress-steps" id="progressSteps">
+                                <div class="progress-step active" id="step1">📄 Gerando PDF...</div>
+                                <div class="progress-step" id="step2">📤 Enviando arquivo...</div>
+                                <div class="progress-step" id="step3">📧 Enviando email...</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -205,6 +154,20 @@
 
     <!-- Container para Mensagens -->
     <div id="messageContainer" class="message-container"></div>
+
+    <!-- Popup de Sucesso -->
+    <div id="successPopup" class="popup-overlay hidden">
+        <div class="popup-content">
+            <div class="popup-icon">✅</div>
+            <h3>Email Enviado com Sucesso!</h3>
+            <div class="popup-details" id="popupDetails">
+                <p>📧 <strong>Enviado para:</strong> <span id="sentToEmail"></span></p>
+                <p>📎 <strong>Assunto:</strong> <span id="emailSubject"></span></p>
+                <p>🔗 <strong>Link expira em:</strong> 14 dias</p>
+            </div>
+            <button class="btn btn--primary" onclick="closeSuccessPopup()">OK</button>
+        </div>
+    </div>
 
     <!-- JavaScript -->
     <script src="app.js"></script>
