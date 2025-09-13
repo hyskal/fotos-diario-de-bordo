@@ -46,10 +46,19 @@ let uploadCount = 0; // Contador de uploads
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM carregado, inicializando aplicação...');
     
-    // Inicializar EmailJS
+    // ✅ INICIALIZAÇÃO EMAILJS v4 ATUALIZADA
     if (typeof emailjs !== 'undefined') {
-        emailjs.init(CONFIG.emailJS.publicKey);
-        console.log('EmailJS inicializado com GitHub Gist');
+        emailjs.init({
+            publicKey: CONFIG.emailJS.publicKey,
+            blockHeadless: true,      // Bloquear bots headless
+            limitRate: {
+                throttle: 10000,      // 10 segundos entre envios
+            }
+        });
+        console.log('✅ EmailJS v4 inicializado com GitHub Gist');
+    } else {
+        console.error('❌ EmailJS não carregado');
+        showMessage('Erro: EmailJS não carregado', 'error');
     }
     
     // Recuperar contador de uploads do localStorage
@@ -554,7 +563,7 @@ async function addPhotosToPDF(pdf, startX, startY) {
     }
 }
 
-// === EMAIL COM LINK DO GIST ===
+// === EMAIL COM LINK DO GIST - EmailJS v4 ===
 async function sendEmailWithLink(gistUrl) {
     const turma = getTurma();
     const estudantes = getStudentNames();
@@ -598,18 +607,19 @@ Upload #${uploadCount} desta hora`;
     };
 
     try {
+        // ✅ CHAMADA EMAILJS v4 ATUALIZADA
         const response = await emailjs.send(
             CONFIG.emailJS.serviceId,
             CONFIG.emailJS.templateId,
             templateParams
         );
         
-        console.log('Email com link GitHub enviado:', response);
+        console.log('✅ Email com link GitHub enviado via EmailJS v4:', response);
         return { success: true, subject, professorEmail, link: gistUrl };
         
     } catch (error) {
-        console.error('Erro ao enviar email:', error);
-        throw new Error(MESSAGES.emailError);
+        console.error('❌ Erro ao enviar email via EmailJS v4:', error);
+        throw new Error(`${MESSAGES.emailError} (${error.text || error.message})`);
     }
 }
 
@@ -789,4 +799,4 @@ function clearForm() {
 window.removePhoto = removePhoto;
 window.closeSuccessPopup = closeSuccessPopup;
 
-console.log(`Sistema Diário de Bordo inicializado - GitHub Gist (${uploadCount}/60 uploads usados)`);
+console.log(`✅ Sistema Diário de Bordo inicializado - GitHub Gist + EmailJS v4 (${uploadCount}/60 uploads usados)`);
