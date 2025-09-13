@@ -9,39 +9,34 @@ const CONFIG = {
         maxWidth: 800,
         maxHeight: 600,
         quality: 0.8
-    }
-};
-
-// === CONFIGURAÇÕES DE COMPARTILHAMENTO ===
-const SHARE_CONFIG = {
-    fileIO: {
-        url: 'https://file.io',
-        defaultExpires: '14d'
+    },
+    upload: {
+        fileIOUrl: 'https://file.io',
+        expirationDays: '14d'
     },
     emailJS: {
-        serviceId: 'service_1leur7g',      // SEU SERVICE ID
-        templateId: 'template_5746a4k',   // SEU TEMPLATE ID
-        publicKey: 'rJrfwXQVQ9g6O0dDY'   // SUA PUBLIC KEY
+        serviceId: 'service_1leur7g',
+        templateId: 'template_5746a4k',
+        publicKey: 'rJrfwXQVQ9g6O0dDY'
     }
 };
 
 const MESSAGES = {
-    success: 'PDF gerado com sucesso!',
-    error: 'Erro ao gerar PDF. Verifique os dados e tente novamente.',
+    success: 'PDF gerado e enviado com sucesso!',
+    error: 'Erro ao processar. Verifique os dados e tente novamente.',
     maxPhotos: 'Máximo de 6 fotos permitidas.',
     invalidFile: 'Tipo de arquivo não permitido. Use apenas JPG ou PNG.',
     fillRequired: 'Preencha todos os campos obrigatórios.',
-    processing: 'Processando imagens e gerando PDF...',
-    maxStudents: 'Máximo de 10 estudantes permitidos.'
+    processing: 'Processando...',
+    maxStudents: 'Máximo de 10 estudantes permitidos.',
+    noInternet: 'Erro de conexão. Verifique sua internet.',
+    uploadError: 'Falha no upload do arquivo.',
+    emailError: 'Falha ao enviar email.'
 };
 
 // Estado da aplicação
 let selectedPhotos = [];
 let generatedPdfBlob = null;
-let shareLink = null;
-let isUploading = false;
-
-// Elementos DOM
 let elements = {};
 
 // === INICIALIZAÇÃO ===
@@ -50,8 +45,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Inicializar EmailJS
     if (typeof emailjs !== 'undefined') {
-        emailjs.init(SHARE_CONFIG.emailJS.publicKey);
-        console.log('EmailJS inicializado com suas credenciais');
+        emailjs.init(CONFIG.emailJS.publicKey);
+        console.log('EmailJS inicializado');
     }
     
     initializeElements();
@@ -61,36 +56,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeElements() {
     elements = {
-        // Elementos existentes
         form: document.getElementById('diaryForm'),
         turmaInput: document.getElementById('turma'),
+        professorEmailInput: document.getElementById('professorEmail'),
         studentsContainer: document.getElementById('studentsContainer'),
         addStudentBtn: document.getElementById('addStudentBtn'),
         dropZone: document.getElementById('dropZone'),
         photoInput: document.getElementById('photoInput'),
         selectPhotosBtn: document.getElementById('selectPhotosBtn'),
         photosPreview: document.getElementById('photosPreview'),
+        photosGrid: document.getElementById('photosGrid'),
         photoCount: document.getElementById('photoCount'),
-        generatePdfBtn: document.getElementById('generatePdfBtn'),
+        generateAndSendBtn: document.getElementById('generateAndSendBtn'),
         generateBtnText: document.getElementById('generateBtnText'),
         loadingSpinner: document.getElementById('loadingSpinner'),
-        downloadPdfBtn: document.getElementById('downloadPdfBtn'),
         clearFormBtn: document.getElementById('clearFormBtn'),
         messageContainer: document.getElementById('messageContainer'),
-        
-        // NOVOS ELEMENTOS PARA COMPARTILHAMENTO
-        shareOptions: document.getElementById('shareOptions'),
-        shareStatus: document.getElementById('shareStatus'),
-        emailForm: document.getElementById('emailForm'),
-        senderEmail: document.getElementById('senderEmail'),
-        teacherEmail: document.getElementById('teacherEmail'),
-        emailMessage: document.getElementById('emailMessage'),
-        uploadResult: document.getElementById('uploadResult'),
-        shareLink: document.getElementById('shareLink'),
         progressContainer: document.getElementById('progressContainer'),
         progressFill: document.getElementById('progressFill'),
         progressText: document.getElementById('progressText'),
-        progressLabel: document.getElementById('progressLabel')
+        progressSteps: document.getElementById('progressSteps'),
+        successPopup: document.getElementById('successPopup'),
+        sentToEmail: document.getElementById('sentToEmail'),
+        emailSubject: document.getElementById('emailSubject')
     };
     
     console.log('Elementos inicializados:', elements);
@@ -101,35 +89,27 @@ function initializeEventListeners() {
     if (elements.addStudentBtn) {
         elements.addStudentBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            console.log('Clicado em adicionar estudante');
             addStudentField();
         });
     }
 
-    // Upload de fotos - múltiplos métodos para garantir funcionamento
+    // Upload de fotos
     if (elements.selectPhotosBtn && elements.photoInput) {
         elements.selectPhotosBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            console.log('Clicado em selecionar fotos');
             elements.photoInput.click();
         });
     }
 
     if (elements.photoInput) {
-        elements.photoInput.addEventListener('change', function(e) {
-            console.log('Arquivos selecionados:', e.target.files);
-            handleFileSelect(e);
-        });
+        elements.photoInput.addEventListener('change', handleFileSelect);
     }
 
     // Drag and drop
     if (elements.dropZone) {
         elements.dropZone.addEventListener('click', function(e) {
             e.preventDefault();
-            if (elements.photoInput) {
-                console.log('Drop zone clicado');
-                elements.photoInput.click();
-            }
+            elements.photoInput.click();
         });
 
         elements.dropZone.addEventListener('dragover', handleDragOver);
@@ -137,28 +117,26 @@ function initializeEventListeners() {
         elements.dropZone.addEventListener('drop', handleDrop);
     }
 
-    // Ações principais
-    if (elements.generatePdfBtn) {
-        elements.generatePdfBtn.addEventListener('click', function(e) {
+    // Ação principal - GERAR E ENVIAR
+    if (elements.generateAndSendBtn) {
+        elements.generateAndSendBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            console.log('Clicado em gerar PDF');
-            generatePDF();
-        });
-    }
-
-    if (elements.downloadPdfBtn) {
-        elements.downloadPdfBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            console.log('Clicado em baixar PDF');
-            downloadPDF();
+            generateAndSendPDF();
         });
     }
 
     if (elements.clearFormBtn) {
         elements.clearFormBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            console.log('Clicado em limpar formulário');
             clearForm();
+        });
+    }
+
+    // Event listener para remover primeiro estudante
+    const firstRemoveBtn = document.querySelector('.remove-student-btn');
+    if (firstRemoveBtn) {
+        firstRemoveBtn.addEventListener('click', function() {
+            this.parentElement.remove();
         });
     }
 
@@ -183,7 +161,6 @@ function addStudentField() {
     }
 
     const currentStudents = elements.studentsContainer.querySelectorAll('.student-input-group').length;
-    console.log('Estudantes atuais:', currentStudents);
 
     if (currentStudents >= CONFIG.maxStudents) {
         showMessage(MESSAGES.maxStudents, 'error');
@@ -218,21 +195,15 @@ function handleFileSelect(e) {
 }
 
 function handleDragOver(e) {
-    if (elements.dropZone) {
-        elements.dropZone.classList.add('drag-over');
-    }
+    elements.dropZone.classList.add('drag-over');
 }
 
 function handleDragLeave(e) {
-    if (elements.dropZone) {
-        elements.dropZone.classList.remove('drag-over');
-    }
+    elements.dropZone.classList.remove('drag-over');
 }
 
 function handleDrop(e) {
-    if (elements.dropZone) {
-        elements.dropZone.classList.remove('drag-over');
-    }
+    elements.dropZone.classList.remove('drag-over');
     const files = Array.from(e.dataTransfer.files);
     processFiles(files);
 }
@@ -278,7 +249,6 @@ async function compressImage(file) {
             
             let { width, height } = img;
 
-            // Calcular novas dimensões mantendo proporção
             if (width > maxWidth || height > maxHeight) {
                 const ratio = Math.min(maxWidth / width, maxHeight / height);
                 width *= ratio;
@@ -309,7 +279,7 @@ async function compressImage(file) {
 }
 
 function updatePhotoPreview() {
-    if (!elements.photosPreview) return;
+    if (!elements.photosPreview || !elements.photosGrid) return;
 
     if (selectedPhotos.length === 0) {
         elements.photosPreview.classList.add('hidden');
@@ -317,11 +287,7 @@ function updatePhotoPreview() {
     }
 
     elements.photosPreview.classList.remove('hidden');
-    
-    const photosGrid = elements.photosPreview.querySelector('.photos-grid') || 
-                      createPhotosGrid();
-
-    photosGrid.innerHTML = '';
+    elements.photosGrid.innerHTML = '';
 
     selectedPhotos.forEach((photo, index) => {
         const photoItem = document.createElement('div');
@@ -332,15 +298,8 @@ function updatePhotoPreview() {
                 ×
             </button>
         `;
-        photosGrid.appendChild(photoItem);
+        elements.photosGrid.appendChild(photoItem);
     });
-}
-
-function createPhotosGrid() {
-    const photosGrid = document.createElement('div');
-    photosGrid.className = 'photos-grid';
-    elements.photosPreview.appendChild(photosGrid);
-    return photosGrid;
 }
 
 function removePhoto(photoId) {
@@ -355,66 +314,94 @@ function updatePhotoCounter() {
     }
 }
 
-// === GERAÇÃO DE PDF ===
-async function generatePDF() {
+// === FUNÇÃO PRINCIPAL: GERAR E ENVIAR ===
+async function generateAndSendPDF() {
     if (!validateForm()) {
         showMessage(MESSAGES.fillRequired, 'error');
         return;
     }
 
-    setLoadingState(true);
-
     try {
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
+        // Mostrar loading
+        setLoadingState(true);
+        showProgress();
 
-        // Configurações
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 20;
-        const contentWidth = pageWidth - 2 * margin;
-
-        // Header
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'bold');
-        pdf.text('DIÁRIO DE BORDO - CETEP/LNAB', pageWidth / 2, 30, { align: 'center' });
-
-        // Informações
-        pdf.setFontSize(12);
-        pdf.setFont(undefined, 'normal');
+        // ETAPA 1: Gerar PDF
+        updateProgressStep(1, 'active');
+        updateProgressBar(20, 'Gerando PDF...');
         
-        const turma = getTurma();
-        const studentNames = getStudentNames();
-        const dateTime = new Date().toLocaleString('pt-BR');
-
-        pdf.text(`Turma: ${turma}`, margin, 50);
-        pdf.text(`Estudantes: ${studentNames}`, margin, 60);
-        pdf.text(`Data/Hora: ${dateTime}`, margin, 70);
-
-        // Fotos
-        if (selectedPhotos.length > 0) {
-            await addPhotosToPDF(pdf, margin, 90);
-        }
-
-        // Gerar blob e download
-        generatedPdfBlob = pdf.output('blob');
-        const fileName = generatePdfFileName();
+        const pdfBlob = await generatePDF();
+        generatedPdfBlob = pdfBlob;
         
-        // Download local
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(generatedPdfBlob);
-        link.download = fileName;
-        link.click();
+        updateProgressStep(1, 'completed');
+        updateProgressBar(40, 'PDF gerado com sucesso!');
 
-        showMessage(MESSAGES.success, 'success');
-        showShareOptions();
+        // ETAPA 2: Upload para servidor
+        updateProgressStep(2, 'active');
+        updateProgressBar(60, 'Enviando arquivo para servidor...');
+        
+        const downloadLink = await uploadToFileIO(pdfBlob);
+        
+        updateProgressStep(2, 'completed');
+        updateProgressBar(80, 'Arquivo enviado!');
+
+        // ETAPA 3: Enviar email
+        updateProgressStep(3, 'active');
+        updateProgressBar(90, 'Enviando email...');
+        
+        await sendAutomaticEmail(downloadLink);
+        
+        updateProgressStep(3, 'completed');
+        updateProgressBar(100, 'Concluído!');
+
+        // Mostrar popup de sucesso
+        setTimeout(() => {
+            hideProgress();
+            setLoadingState(false);
+            showSuccessPopup(downloadLink);
+        }, 1000);
 
     } catch (error) {
-        console.error('Erro:', error);
-        showMessage(MESSAGES.error, 'error');
-    } finally {
+        console.error('Erro no processo:', error);
+        hideProgress();
         setLoadingState(false);
+        showMessage(`Erro: ${error.message}`, 'error');
     }
+}
+
+// === GERAÇÃO DE PDF ===
+async function generatePDF() {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    // Configurações
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 20;
+
+    // Header
+    pdf.setFontSize(16);
+    pdf.setFont(undefined, 'bold');
+    pdf.text('DIÁRIO DE BORDO - CETEP/LNAB', pageWidth / 2, 30, { align: 'center' });
+
+    // Informações
+    pdf.setFontSize(12);
+    pdf.setFont(undefined, 'normal');
+    
+    const turma = getTurma();
+    const studentNames = getStudentNames();
+    const dateTime = new Date().toLocaleString('pt-BR');
+
+    pdf.text(`Turma: ${turma}`, margin, 50);
+    pdf.text(`Estudantes: ${studentNames}`, margin, 60);
+    pdf.text(`Data/Hora: ${dateTime}`, margin, 70);
+
+    // Fotos
+    if (selectedPhotos.length > 0) {
+        await addPhotosToPDF(pdf, margin, 90);
+    }
+
+    return pdf.output('blob');
 }
 
 async function addPhotosToPDF(pdf, startX, startY) {
@@ -431,24 +418,20 @@ async function addPhotosToPDF(pdf, startX, startY) {
         const photo = selectedPhotos[i];
         
         try {
-            // Adicionar imagem ao PDF
             pdf.addImage(photo.url, 'JPEG', x, y, photoWidth, photoHeight);
             
             photosInCurrentRow++;
             
             if (photosInCurrentRow >= photosPerRow) {
-                // Nova linha
                 x = startX;
                 y += photoHeight + spacing;
                 photosInCurrentRow = 0;
                 
-                // Verificar se precisa de nova página
                 if (y + photoHeight > pdf.internal.pageSize.getHeight() - 20) {
                     pdf.addPage();
                     y = 20;
                 }
             } else {
-                // Próxima coluna
                 x += photoWidth + spacing;
             }
             
@@ -458,244 +441,146 @@ async function addPhotosToPDF(pdf, startX, startY) {
     }
 }
 
-function validateForm() {
-    const turma = getTurma();
-    const students = getStudentNames();
-    
-    return turma.length > 0 && students.length > 0;
-}
-
-function setLoadingState(isLoading) {
-    if (elements.generatePdfBtn) {
-        elements.generatePdfBtn.disabled = isLoading;
-    }
-    
-    if (elements.generateBtnText) {
-        elements.generateBtnText.textContent = isLoading ? 'Processando...' : 'Gerar PDF';
-    }
-    
-    if (elements.loadingSpinner) {
-        elements.loadingSpinner.style.display = isLoading ? 'inline-block' : 'none';
-    }
-}
-
-function downloadPDF() {
-    if (!generatedPdfBlob) {
-        showMessage('Nenhum PDF gerado ainda', 'error');
-        return;
-    }
-    
+// === UPLOAD PARA FILE.IO ===
+async function uploadToFileIO(pdfBlob) {
     const fileName = generatePdfFileName();
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(generatedPdfBlob);
-    link.download = fileName;
-    link.click();
-}
+    const formData = new FormData();
+    formData.append('file', pdfBlob, fileName);
 
-// === COMPARTILHAMENTO ===
-function showShareOptions() {
-    if (elements.shareOptions) {
-        elements.shareOptions.style.display = 'block';
-        elements.shareStatus.className = 'share-status ready';
-        elements.shareStatus.textContent = '✅ PDF gerado! Escolha como compartilhar:';
-    }
-    
-    // Verificar se Web Share API está disponível
-    const webShareOption = document.getElementById('webShareOption');
-    if (webShareOption) {
-        if (navigator.share) {
-            webShareOption.style.display = 'block';
-        } else {
-            webShareOption.style.display = 'none';
-        }
-    }
-}
-
-// === WEB SHARE API ===
-async function shareNatively() {
-    if (!generatedPdfBlob) {
-        showMessage('Nenhum PDF gerado ainda', 'error');
-        return;
-    }
-    
-    if (navigator.share) {
-        try {
-            const fileName = generatePdfFileName();
-            const file = new File([generatedPdfBlob], fileName, { type: 'application/pdf' });
-            
-            await navigator.share({
-                title: `Diário de Bordo - ${getTurma()}`,
-                text: `Diário de bordo da turma ${getTurma()} - ${getStudentNames()}`,
-                files: [file]
-            });
-            
-            showMessage('📱 Compartilhado com sucesso!', 'success');
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                console.error('Erro ao compartilhar:', error);
-                showMessage('❌ Erro ao compartilhar', 'error');
-            }
-        }
-    } else {
-        showMessage('Web Share não disponível neste navegador', 'warning');
-    }
-}
-
-// === FILE.IO UPLOAD ===
-async function uploadToFileIO() {
-    if (!generatedPdfBlob) {
-        showMessage('Nenhum PDF gerado ainda', 'error');
-        return;
-    }
-    
-    if (isUploading) {
-        showMessage('Upload em andamento...', 'warning');
-        return;
-    }
-    
-    isUploading = true;
-    showProgress('Enviando para File.io...', 0);
-    
     try {
-        const fileName = generatePdfFileName();
-        const formData = new FormData();
-        formData.append('file', generatedPdfBlob, fileName);
-        
-        const response = await fetch(`${SHARE_CONFIG.fileIO.url}?expires=${SHARE_CONFIG.fileIO.defaultExpires}`, {
+        const response = await fetch(`${CONFIG.upload.fileIOUrl}?expires=${CONFIG.upload.expirationDays}`, {
             method: 'POST',
             body: formData
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const result = await response.json();
         
         if (result.success) {
-            shareLink = result.link;
-            showUploadResult(result.link, SHARE_CONFIG.fileIO.defaultExpires);
-            showMessage('🌐 Link gerado com sucesso!', 'success');
+            return result.link;
         } else {
-            throw new Error(result.message || 'Erro desconhecido');
+            throw new Error(result.message || 'Erro desconhecido no upload');
         }
         
     } catch (error) {
         console.error('Erro no upload:', error);
-        showMessage(`❌ Erro no upload: ${error.message}`, 'error');
-    } finally {
-        isUploading = false;
-        hideProgress();
+        throw new Error(MESSAGES.uploadError);
     }
 }
 
-// === EMAILJS COM SUAS CREDENCIAIS ===
-function showEmailForm() {
-    if (elements.emailForm) {
-        elements.emailForm.classList.remove('hidden');
-    }
-    
-    // Pre-preencher com dados salvos
-    const savedEmail = localStorage.getItem('user_email');
-    if (savedEmail && elements.senderEmail) {
-        elements.senderEmail.value = savedEmail;
-    }
-}
-
-function hideEmailForm() {
-    if (elements.emailForm) {
-        elements.emailForm.classList.add('hidden');
-    }
-}
-
-async function sendViaEmail() {
-    const senderEmail = elements.senderEmail?.value.trim() || '';
-    const teacherEmail = elements.teacherEmail?.value.trim() || '';
-    const message = elements.emailMessage?.value.trim() || '';
-    
-    // Validações
-    if (!senderEmail || !teacherEmail) {
-        showMessage('Por favor, preencha os emails obrigatórios', 'error');
-        return;
-    }
-    
-    // Verificar se há link do File.io ou gerar um
-    let linkToSend = shareLink;
-    if (!linkToSend) {
-        showMessage('Gerando link para envio...', 'info');
-        await uploadToFileIO();
-        linkToSend = shareLink;
-        
-        if (!linkToSend) {
-            showMessage('❌ Erro ao gerar link. Tente novamente.', 'error');
-            return;
-        }
-    }
-    
-    // Salvar email do usuário
-    localStorage.setItem('user_email', senderEmail);
-    
-    // Preparar dados do email
-    const studentNames = getStudentNames();
+// === EMAIL AUTOMÁTICO ===
+async function sendAutomaticEmail(downloadLink) {
     const turma = getTurma();
-    const emailTitle = `${turma} - ${studentNames}`;
+    const estudantes = getStudentNames();
+    const professorEmail = getProfessorEmail();
+    const subject = `${turma} - ${estudantes}`;
     
-    const emailBody = `Olá,
+    const emailBody = `Prezado Professor,
 
 Segue o diário de bordo da turma ${turma}.
 
-Estudantes: ${studentNames}
+Estudantes: ${estudantes}
+Data: ${new Date().toLocaleString('pt-BR')}
 
-Link para download: ${linkToSend}
+Link para download: ${downloadLink}
 
-${message ? `Mensagem adicional:\n${message}` : ''}
-
----
 Este link expira em 14 dias ou após o primeiro download.
-Sistema de Diário de Bordo - CETEP/LNAB`;
 
-    // Parâmetros para EmailJS
+Atenciosamente,
+Sistema CETEP/LNAB`;
+
     const templateParams = {
-        from_email: senderEmail,
-        to_email: teacherEmail,
-        subject: emailTitle,
+        to_email: professorEmail,
+        subject: subject,
         message: emailBody,
-        student_names: studentNames,
         turma: turma,
-        download_link: linkToSend
+        estudantes: estudantes,
+        download_link: downloadLink,
+        data: new Date().toLocaleString('pt-BR')
     };
-    
+
     try {
-        showProgress('Enviando email...', 50);
-        
         const response = await emailjs.send(
-            SHARE_CONFIG.emailJS.serviceId,    // service_1leur7g
-            SHARE_CONFIG.emailJS.templateId,   // template_5746a4k
-            templateParams,
-            SHARE_CONFIG.emailJS.publicKey     // rJrfwXQVQ9g6O0dDY
+            CONFIG.emailJS.serviceId,
+            CONFIG.emailJS.templateId,
+            templateParams
         );
         
         console.log('Email enviado com sucesso:', response);
-        showMessage('📧 Email enviado com sucesso!', 'success');
-        hideEmailForm();
+        return { success: true, subject, professorEmail };
         
     } catch (error) {
         console.error('Erro ao enviar email:', error);
-        
-        // Tratamento específico para erro 412
-        if (error.status === 412) {
-            showMessage('❌ Erro de autenticação. Reconecte sua conta Gmail no EmailJS', 'error');
-        } else {
-            showMessage(`❌ Erro ao enviar email: ${error.text || error.message || 'Tente novamente'}`, 'error');
-        }
-    } finally {
-        hideProgress();
+        throw new Error(MESSAGES.emailError);
     }
 }
 
+// === FUNÇÕES DE PROGRESS E UI ===
+function showProgress() {
+    elements.progressContainer.classList.remove('hidden');
+    resetProgressSteps();
+}
+
+function hideProgress() {
+    elements.progressContainer.classList.add('hidden');
+}
+
+function updateProgressBar(percent, text) {
+    elements.progressFill.style.width = `${percent}%`;
+    elements.progressText.textContent = `${percent}%`;
+}
+
+function updateProgressStep(stepNumber, status) {
+    const step = document.getElementById(`step${stepNumber}`);
+    if (step) {
+        step.className = `progress-step ${status}`;
+    }
+}
+
+function resetProgressSteps() {
+    const steps = elements.progressSteps.querySelectorAll('.progress-step');
+    steps.forEach(step => {
+        step.className = 'progress-step';
+    });
+}
+
+// === POPUP DE SUCESSO ===
+function showSuccessPopup(downloadLink) {
+    const professorEmail = getProfessorEmail();
+    const subject = `${getTurma()} - ${getStudentNames()}`;
+    
+    elements.sentToEmail.textContent = professorEmail;
+    elements.emailSubject.textContent = subject;
+    elements.successPopup.classList.remove('hidden');
+    
+    // Auto-fechar após 10 segundos
+    setTimeout(() => {
+        closeSuccessPopup();
+    }, 10000);
+}
+
+function closeSuccessPopup() {
+    elements.successPopup.classList.add('hidden');
+}
+
 // === FUNÇÕES AUXILIARES ===
+function validateForm() {
+    const turma = getTurma();
+    const students = getStudentNames();
+    const professorEmail = getProfessorEmail();
+    
+    return turma.length > 0 && students.length > 0 && professorEmail.length > 0;
+}
+
 function getTurma() {
     return elements.turmaInput?.value.trim() || '';
+}
+
+function getProfessorEmail() {
+    return elements.professorEmailInput?.value.trim() || '';
 }
 
 function getStudentNames() {
@@ -717,48 +602,22 @@ function generatePdfFileName() {
     return `${day}${month}${year}-${turma}-${students}.pdf`;
 }
 
-function showUploadResult(link, expires) {
-    if (elements.uploadResult && elements.shareLink) {
-        elements.shareLink.value = link;
-        const expirationTime = document.getElementById('expirationTime');
-        if (expirationTime) {
-            expirationTime.textContent = expires === '14d' ? '14 dias' : expires;
-        }
-        elements.uploadResult.classList.remove('hidden');
+function setLoadingState(isLoading) {
+    if (elements.generateAndSendBtn) {
+        elements.generateAndSendBtn.disabled = isLoading;
     }
-}
-
-function copyLink() {
-    if (elements.shareLink) {
-        elements.shareLink.select();
-        document.execCommand('copy');
-        showMessage('📋 Link copiado!', 'success');
-        
-        // Para navegadores modernos
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(elements.shareLink.value);
-        }
+    
+    if (elements.generateBtnText) {
+        elements.generateBtnText.textContent = isLoading ? 'Processando...' : '🚀 Gerar PDF e Enviar';
     }
-}
-
-function showProgress(label, percent) {
-    if (elements.progressContainer) {
-        elements.progressContainer.classList.remove('hidden');
-        if (elements.progressFill) elements.progressFill.style.width = `${percent}%`;
-        if (elements.progressText) elements.progressText.textContent = `${percent}%`;
-        if (elements.progressLabel) elements.progressLabel.textContent = label;
-    }
-}
-
-function hideProgress() {
-    if (elements.progressContainer) {
-        elements.progressContainer.classList.add('hidden');
+    
+    if (elements.loadingSpinner) {
+        elements.loadingSpinner.style.display = isLoading ? 'inline-block' : 'none';
     }
 }
 
 function showMessage(message, type) {
     if (!elements.messageContainer) {
-        // Criar container se não existir
         const container = document.createElement('div');
         container.id = 'messageContainer';
         container.className = 'message-container';
@@ -772,7 +631,6 @@ function showMessage(message, type) {
 
     elements.messageContainer.appendChild(messageElement);
 
-    // Auto remove após 5 segundos
     setTimeout(() => {
         if (messageElement.parentNode) {
             messageElement.parentNode.removeChild(messageElement);
@@ -783,10 +641,29 @@ function showMessage(message, type) {
 function clearForm() {
     // Limpar campos
     if (elements.turmaInput) elements.turmaInput.value = '';
+    if (elements.professorEmailInput) elements.professorEmailInput.value = '';
     
     // Limpar estudantes
     if (elements.studentsContainer) {
-        elements.studentsContainer.innerHTML = '';
+        elements.studentsContainer.innerHTML = `
+            <div class="student-input-group">
+                <div class="form-group">
+                    <label class="form-label">Nome do Estudante</label>
+                    <input type="text" class="form-control student-name" placeholder="Digite o nome completo" required>
+                </div>
+                <button type="button" class="remove-student-btn">
+                    Remover
+                </button>
+            </div>
+        `;
+        
+        // Re-adicionar event listener
+        const firstRemoveBtn = elements.studentsContainer.querySelector('.remove-student-btn');
+        if (firstRemoveBtn) {
+            firstRemoveBtn.addEventListener('click', function() {
+                this.parentElement.remove();
+            });
+        }
     }
     
     // Limpar fotos
@@ -794,51 +671,15 @@ function clearForm() {
     updatePhotoPreview();
     updatePhotoCounter();
     
-    // Limpar PDF gerado
+    // Limpar estado
     generatedPdfBlob = null;
-    shareLink = null;
-    
-    // Esconder opções de compartilhamento
-    if (elements.shareOptions) {
-        elements.shareOptions.style.display = 'none';
-    }
+    hideProgress();
     
     showMessage('Formulário limpo', 'success');
 }
 
-// === FUNÇÃO DE TESTE ===
-function testEmailJSConnection() {
-    const testParams = {
-        from_email: 'teste@exemplo.com',
-        to_email: 'seuemail@gmail.com', // Substitua pelo seu email para teste
-        subject: 'Teste EmailJS - CETEP',
-        message: 'Este é um email de teste do sistema de diário de bordo.\n\nSe você recebeu este email, a configuração está funcionando!\n\nCredenciais utilizadas:\nService ID: service_1leur7g\nTemplate ID: template_5746a4k\nPublic Key: rJrfwXQVQ9g6O0dDY'
-    };
-    
-    emailjs.send(
-        SHARE_CONFIG.emailJS.serviceId,
-        SHARE_CONFIG.emailJS.templateId,
-        testParams,
-        SHARE_CONFIG.emailJS.publicKey
-    )
-    .then((response) => {
-        console.log('Teste enviado com sucesso:', response);
-        alert('✅ Email de teste enviado! Verifique sua caixa de entrada.');
-    })
-    .catch((error) => {
-        console.error('Erro no teste:', error);
-        alert(`❌ Erro no teste: ${error.text || error.message}`);
-    });
-}
-
-// Tornar função disponível globalmente para teste
-window.testEmailJSConnection = testEmailJSConnection;
-
-// === FUNÇÕES GLOBAIS PARA HTML ===
-window.shareNatively = shareNatively;
-window.uploadToFileIO = uploadToFileIO;
-window.showEmailForm = showEmailForm;
-window.hideEmailForm = hideEmailForm;
-window.sendViaEmail = sendViaEmail;
-window.copyLink = copyLink;
+// === FUNÇÕES GLOBAIS ===
 window.removePhoto = removePhoto;
+window.closeSuccessPopup = closeSuccessPopup;
+
+console.log('Sistema Diário de Bordo inicializado com fluxo automático');
